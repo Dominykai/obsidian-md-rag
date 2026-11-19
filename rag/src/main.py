@@ -5,7 +5,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent.parent
-CHROMA_DB_PATH = ROOT_DIR / "rag" / "data" / "chroma.db"
+CHROMA_DIR = ROOT_DIR / "rag" / "data" / "chroma"
 
 def main():
     vault_path = Path(str(input("Input path to vault:\n")).strip("\'\""))
@@ -24,13 +24,13 @@ def main():
     fallback_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=100)
 
     embedder_model = HuggingFaceEmbeddings(
-        model_name="Qwen/Qwen3-Embedding-4B",
+        model_name="Qwen/Qwen3-Embedding-0.6B",
     )
 
     vector_store = Chroma(
         collection_name="markdown_vault",
         embedding_function=embedder_model,
-        persist_directory=str(CHROMA_DB_PATH)
+        persist_directory=str(CHROMA_DIR)
     )
 
     documents = []
