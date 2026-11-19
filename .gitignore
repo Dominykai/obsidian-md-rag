@@ -1,3 +1,6 @@
+rag/data/*
+!rag/data/README.md
+
 # Created by https://www.toptal.com/developers/gitignore/api/intellij+all,python,linux,macos,windows
 # Edit at https://www.toptal.com/developers/gitignore?templates=intellij+all,python,linux,macos,windows
 
