@@ -1,13 +1,15 @@
+import asyncio
+
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from pathlib import Path
+from gemini_webapi import GeminiClient
 
-ROOT_DIR = Path(__file__).parent.parent.parent
-CHROMA_DIR = ROOT_DIR / "rag" / "data" / "chroma"
+from rag.src.core.config import CHROMA_DIR, settings
 
-def main():
+async def main():
     vault_path = Path(str(input("Input path to vault:\n")).strip("\'\""))
     md_files = list(vault_path.rglob("*.md"))
     print(f"Discovered {len(md_files)} files")
@@ -52,23 +54,39 @@ def main():
 
     print(f"Generated {len(documents)} chunks")
 
-    if documents:
-        vector_store.add_documents(documents)
+    #if documents:
+    #    vector_store.add_documents(documents)
 
     print(f"Stored documents in Chroma DB")
 
+    query = str(input("Input query:\n")).strip("\'\"")
+
     results = vector_store.similarity_search(
-        "How do Regression Trees work?",
+        query,
         k=10
     )
 
-    for result in results:
-        print(result.page_content)
-        print(result.metadata)
-        print("---")
+    print(f"Received {len(results)} chunks")
 
+    gemini_client = GeminiClient(
+        secure_1ps1d=settings.GEMINI_WEB_1PSID,
+        secure_1ps1d_ts=settings.GEMINI_WEB_1PSIDTS
+    )
+
+    await gemini_client.init(timeout=30, auto_close=False, close_delay=300)
+
+    prompt = f"""
+    Using the following context, answer the question below, you may utilise external knowledge but warn the user if done so and why (e.g. insufficient context).
+
+    User's Query: {query}
+    
+    Context:
+    {results}
+    """
+    response = await gemini_client.generate_content(prompt=prompt, temporary=True)
+    print(response.text)
 
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
