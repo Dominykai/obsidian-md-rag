@@ -1,4 +1,6 @@
 import asyncio
+from dataclasses import dataclass
+import json
 
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -7,10 +9,40 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from pathlib import Path
 from gemini_webapi import GeminiClient
 
-from rag.src.core.config import CHROMA_DIR, settings
+from rag.src.core.config import get_data_path, settings
+
+@dataclass
+class Vault:
+    path: Path
+
+def get_vaults(vault_path: Path) -> list[Vault]:
+    if vault_path.exists():
+        return [Vault(path=Path(v["path"])) for v in json.loads(vault_path.read_text())]
+    else:
+        vault_path.write_text(json.dumps([]))
+        return []
+
+def select_vault(vaults: list[Vault]) -> str:
+    vaults.append(Vault(path=Path("Add new vault")))
+
+    for v in enumerate(vaults):
+        print(f"{v[0]}: {v[1].path}")
+
+    choice = int(input("Select a vault:\n"))
+    return str(vaults[choice].path)
 
 async def main():
-    vault_path = Path(str(input("Input path to vault:\n")).strip("\'\""))
+    vault_path = get_data_path("vaults.json")
+    preloaded_vaults = get_vaults(vault_path)
+    vault_path = select_vault(preloaded_vaults)
+
+    if vault_path == "Add new vault":
+        vault_path = str(input("Enter the path to the vault:\n"))
+        preloaded_vaults.append(Vault(path=Path(vault_path)))
+        (get_data_path("vaults.json")).write_text(json.dumps([{"path": str(v.path)} for v in preloaded_vaults]))
+        
+    vault_path = Path(vault_path)
+
     md_files = list(vault_path.rglob("*.md"))
     print(f"Discovered {len(md_files)} files")
 
@@ -32,7 +64,7 @@ async def main():
     vector_store = Chroma(
         collection_name="markdown_vault",
         embedding_function=embedder_model,
-        persist_directory=str(CHROMA_DIR)
+        persist_directory=str(get_data_path("chroma"))
     )
 
     documents = []
@@ -85,7 +117,6 @@ async def main():
     """
     response = await gemini_client.generate_content(prompt=prompt, temporary=True)
     print(response.text)
-
 
 
 if __name__ == '__main__':
