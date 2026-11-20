@@ -1,71 +1,32 @@
 import asyncio
-from dataclasses import dataclass
-import json
-
-from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
 
 from pathlib import Path
 from gemini_webapi import GeminiClient
 
 from rag.src.core.config import get_data_path, settings
+from rag.src.models.vault import get_vaults_from_file, Vault, add_vault_to_file, search_vault_for_md_files
 
-@dataclass
-class Vault:
-    path: Path
-
-def get_vaults(vault_path: Path) -> list[Vault]:
-    if vault_path.exists():
-        return [Vault(path=Path(v["path"])) for v in json.loads(vault_path.read_text())]
-    else:
-        vault_path.write_text(json.dumps([]))
-        return []
-
-def select_vault(vaults: list[Vault]) -> str:
-    vaults.append(Vault(path=Path("Add new vault")))
-
-    for v in enumerate(vaults):
-        print(f"{v[0]}: {v[1].path}")
-
-    choice = int(input("Select a vault:\n"))
-    return str(vaults[choice].path)
 
 async def main():
     vault_path = get_data_path("vaults.json")
-    preloaded_vaults = get_vaults(vault_path)
-    vault_path = select_vault(preloaded_vaults)
+    saved_vaults = get_vaults_from_file(vault_path)
 
-    if vault_path == "Add new vault":
-        vault_path = str(input("Enter the path to the vault:\n"))
-        preloaded_vaults.append(Vault(path=Path(vault_path)))
-        (get_data_path("vaults.json")).write_text(json.dumps([{"path": str(v.path)} for v in preloaded_vaults]))
-        
-    vault_path = Path(vault_path)
+    next_free = 0
+    for i, vault in enumerate(saved_vaults):
+        print(f"{i}. {vault}")
+        next_free = i + 1
+    print(f"{next_free}. Create new vault")
+    select = int(input("Select vault number: "))
 
-    md_files = list(vault_path.rglob("*.md"))
+    if select == next_free:
+        vault_path = Path(str(input("Input vault path: ")))
+        add_vault_to_file(vault_path, Vault(path=vault_path))
+
+    else:
+        vault_path = saved_vaults[select].path
+
+    md_files = search_vault_for_md_files(vault_path)
     print(f"Discovered {len(md_files)} files")
-
-    splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=[
-            ("#", "H1"), ("##", "H2"), ("###", "H3"),
-            ("####", "H4"), ("#####", "H5"), ("######", "H6"),
-        ],
-        strip_headers=False
-    )
-
-    chunk_size = 500
-    fallback_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=100)
-
-    embedder_model = HuggingFaceEmbeddings(
-        model_name="Qwen/Qwen3-Embedding-0.6B",
-    )
-
-    vector_store = Chroma(
-        collection_name="markdown_vault",
-        embedding_function=embedder_model,
-        persist_directory=str(get_data_path("chroma"))
-    )
 
     documents = []
 
